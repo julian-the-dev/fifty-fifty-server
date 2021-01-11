@@ -7,8 +7,8 @@ import logger from "morgan";
 import path from "path";
 import dotenv from "dotenv";
 import bcrypt from "bcrypt";
-import bodyParser from 'body-parser';
-import jwt from 'jsonwebtoken';
+import bodyParser from "body-parser";
+import jwt from "jsonwebtoken";
 
 async function main() {
   // initialize configuration
@@ -39,7 +39,7 @@ function init() {
 
 function initRoutes(app) {
   app.use("/signup", async (req, res) => {
-    console.log('signup received!', req.body);
+    console.log("signup received!", req.body);
     const password = req.body.password;
     const email = req.body.email;
     const username = req.body.username;
@@ -48,45 +48,93 @@ function initRoutes(app) {
       .find({ $or: [{ username }, { email }] })
       .toArray();
     if (usersFound.length) {
-      res.status(500);
-      res.send("Error user found");
+      send(res, 500, "Error user found");
     } else {
       const hash = await bcrypt.hash(password, COMMON.saltRounds);
       collUsers.insertOne({ username, email, hash });
+      send(res, 200);
     }
   });
+
   app.use("/login", async (req, res) => {
     const password = req.body.password;
     const username = req.body.username;
     const collUsers = DbUtils.getDB().collection("users");
     const userFound = await collUsers.findOne({ username });
-    console.log('login with user', userFound);
+    console.log("login with user", userFound);
     if (userFound) {
       const passwordMatch = await bcrypt.compare(password, userFound.hash);
       if (passwordMatch) {
-        const accessToken = createToken(userFound, process.env.ACCESS_TOKEN_SECRET);
-        const refreshToken = createToken(userFound, process.env.REFRESH_TOKEN_SECRET, '1y');
-        DbUtils.getDB().collection("refresh_tokens").insertOne({refreshToken});
-        res.json({accessToken, refreshToken});
+        const accessToken = createToken(
+          userFound,
+          process.env.ACCESS_TOKEN_SECRET
+        );
+        const refreshToken = createToken(
+          userFound,
+          process.env.REFRESH_TOKEN_SECRET,
+          "1y"
+        );
+        DbUtils.getDB()
+          .collection("refresh_tokens")
+          .insertOne({ refreshToken });
+        res.json({ accessToken, refreshToken });
       } else {
-        res.status(503);
-        res.send("Password does not match!");
+        send(res, 500, "Password does not match!");
       }
     } else {
-      res.status(500);
-      res.send("Error user not found");
+      send(res, 500, "Error user not found");
     }
   });
-  app.use("/token", (req, res) => res.send("Express + TypeScript Server"));
+
+  app.use("/token", async (req, res) => {
+    const refreshToken = req.body.refreshToken;
+    if (!refreshToken) {
+      send(res, 403, "no refresh token sent");
+      return;
+    }
+    const itemFound = await DbUtils.getDB()
+      .collection("refresh_tokens")
+      .findOne({ refreshToken });
+    if (!itemFound) {
+      send(res, 403, "error no refresh token found in db");
+      return;
+    }
+    jwt.verify(
+      itemFound.refreshToken,
+      process.env.REFRESH_TOKEN_SECRET,
+      (err, user) => {
+        console.log("err", err, "user", user);
+        if (err) {
+          send(res, 403, "error in jwt verify");
+          return;
+        }
+        const accessToken = createToken(
+          {
+            _id: user.id,
+          },
+          process.env.ACCESS_TOKEN_SECRET
+        );
+        send(res, 200, { accessToken });
+      }
+    );
+  });
+
   app.use("/logout", (req, res) => {
     const refreshToken = req.body.refreshToken;
-    DbUtils.getDB().collection("refresh_tokens").deleteOne({refreshToken});
-    res.sendStatus(200);
+    DbUtils.getDB().collection("refresh_tokens").deleteOne({ refreshToken });
+    return res.status(200);
   });
 }
 
-function createToken(user, secret, expiresIn = '15s') {
-  return jwt.sign({id: user._id}, secret, {expiresIn});
+function createToken(user, secret, expiresIn = "15s") {
+  return jwt.sign({ id: user._id }, secret, { expiresIn });
+}
+
+function send(res: any, code: number, item?) {
+  res.status(code);
+  if (item) {
+    typeof item === "string" ? res.send(item) : res.json(item);
+  }
 }
 
 function handleErrors(app) {
