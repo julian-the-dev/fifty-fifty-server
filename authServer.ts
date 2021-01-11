@@ -10,7 +10,7 @@ async function main() {
   // initialize configuration
   dotenv.config();
   const app = init();
-  DbUtils.connect('mongodb://localhost:27017')
+  DbUtils.connect(process.env.DATABASE)
   const port = process.env.AUTH_PORT;
   initRoutes(app);
   handleErrors(app);

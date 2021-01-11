@@ -1,20 +1,21 @@
 import mongodb from "mongodb";
 
 export class DbUtils {
-  static client;
+  static database: mongodb.Db;
 
   public static async connect(url) {
-    if (!this.client) {
-      mongodb.MongoClient.connect(url, (err, dbClient) => {
+    if (!this.database) {
+      mongodb.MongoClient.connect(url, { useUnifiedTopology: true }, (err, client) => {
         if (err) {
           throw err;
         }
-        this.client = dbClient;
+        console.log('Db initialised !');
+        this.database = client.db();
       });
     }
   }
 
-  public static getDbClient() {
-    return this.client;
+  public static getDB(): mongodb.Db {
+    return this.database;
   }
 }
