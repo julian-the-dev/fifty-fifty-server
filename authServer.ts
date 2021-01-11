@@ -7,6 +7,8 @@ import logger from "morgan";
 import path from "path";
 import dotenv from "dotenv";
 import bcrypt from "bcrypt";
+import bodyParser from 'body-parser';
+import jwt from 'jsonwebtoken';
 
 async function main() {
   // initialize configuration
@@ -29,22 +31,23 @@ function init() {
   app.use(logger("dev"));
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
+  app.use(bodyParser.json());
   app.use(cookieParser());
   app.use(express.static(path.join(__dirname, "public")));
-  app.get("/", (req, res) => res.send("Express + TypeScript Server"));
   return app;
 }
 
 function initRoutes(app) {
-  app.get("/signup", async (req, res) => {
+  app.use("/signup", async (req, res) => {
+    console.log('signup received!', req.body);
     const password = req.body.password;
     const email = req.body.email;
     const username = req.body.username;
     const collUsers = DbUtils.getDB().collection("users");
-    const userFound = await collUsers
+    const usersFound = await collUsers
       .find({ $or: [{ username }, { email }] })
       .toArray();
-    if (userFound) {
+    if (usersFound.length) {
       res.status(500);
       res.send("Error user found");
     } else {
@@ -52,14 +55,19 @@ function initRoutes(app) {
       collUsers.insertOne({ username, email, hash });
     }
   });
-  app.get("/login", async (req, res) => {
+  app.use("/login", async (req, res) => {
     const password = req.body.password;
     const username = req.body.username;
     const collUsers = DbUtils.getDB().collection("users");
     const userFound = await collUsers.findOne({ username });
+    console.log('login with user', userFound);
     if (userFound) {
       const passwordMatch = await bcrypt.compare(password, userFound.hash);
       if (passwordMatch) {
+        const accessToken = createToken(userFound, process.env.ACCESS_TOKEN_SECRET);
+        const refreshToken = createToken(userFound, process.env.REFRESH_TOKEN_SECRET, '1y');
+        DbUtils.getDB().collection("refresh_tokens").insertOne({refreshToken});
+        res.json({accessToken, refreshToken});
       } else {
         res.status(503);
         res.send("Password does not match!");
@@ -69,8 +77,16 @@ function initRoutes(app) {
       res.send("Error user not found");
     }
   });
-  app.get("/token", (req, res) => res.send("Express + TypeScript Server"));
-  app.get("/logout", (req, res) => res.send("Express + TypeScript Server"));
+  app.use("/token", (req, res) => res.send("Express + TypeScript Server"));
+  app.use("/logout", (req, res) => {
+    const refreshToken = req.body.refreshToken;
+    DbUtils.getDB().collection("refresh_tokens").deleteOne({refreshToken});
+    res.sendStatus(200);
+  });
+}
+
+function createToken(user, secret, expiresIn = '15s') {
+  return jwt.sign({id: user._id}, secret, {expiresIn});
 }
 
 function handleErrors(app) {
