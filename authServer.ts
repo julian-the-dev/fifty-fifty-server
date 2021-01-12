@@ -1,14 +1,14 @@
-import { COMMON } from "./utils/common.const";
-import { DbUtils } from "./utils/db.utils";
+import bcrypt from "bcrypt";
 import cookieParser from "cookie-parser";
+import cors from "cors";
+import dotenv from "dotenv";
 import express from "express";
 import createError from "http-errors";
+import jwt from "jsonwebtoken";
 import logger from "morgan";
 import path from "path";
-import dotenv from "dotenv";
-import bcrypt from "bcrypt";
-import bodyParser from "body-parser";
-import jwt from "jsonwebtoken";
+import { COMMON } from "./utils/common.const";
+import { DbUtils } from "./utils/db.utils";
 
 async function main() {
   // initialize configuration
@@ -31,14 +31,13 @@ function init() {
   app.use(logger("dev"));
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
-  app.use(bodyParser.json());
   app.use(cookieParser());
   app.use(express.static(path.join(__dirname, "public")));
   return app;
 }
 
 function initRoutes(app) {
-  app.use("/signup", async (req, res) => {
+  app.use("/signup", cors(), async (req, res) => {
     console.log("signup received!", req.body);
     const password = req.body.password;
     const email = req.body.email;
@@ -52,11 +51,11 @@ function initRoutes(app) {
     } else {
       const hash = await bcrypt.hash(password, COMMON.saltRounds);
       collUsers.insertOne({ username, email, hash });
-      send(res, 200);
+      send(res, 200, 'ok');
     }
   });
 
-  app.use("/login", async (req, res) => {
+  app.use("/login", cors(), async (req, res) => {
     const password = req.body.password;
     const username = req.body.username;
     const collUsers = DbUtils.getDB().collection("users");
@@ -86,7 +85,7 @@ function initRoutes(app) {
     }
   });
 
-  app.use("/token", async (req, res) => {
+  app.use("/token", cors(), async (req, res) => {
     const refreshToken = req.body.refreshToken;
     if (!refreshToken) {
       send(res, 403, "no refresh token sent");
@@ -119,7 +118,7 @@ function initRoutes(app) {
     );
   });
 
-  app.use("/logout", (req, res) => {
+  app.use("/logout", cors(), (req, res) => {
     const refreshToken = req.body.refreshToken;
     DbUtils.getDB().collection("refresh_tokens").deleteOne({ refreshToken });
     return res.status(200);
