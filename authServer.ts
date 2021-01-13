@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import logger from "morgan";
 import path from "path";
 import { COMMON } from "./utils/common.const";
+import { CommonUtils } from "./utils/common.utils";
 import { DbUtils } from "./utils/db.utils";
 
 async function main() {
@@ -47,11 +48,11 @@ function initRoutes(app) {
       .find({ $or: [{ username }, { email }] })
       .toArray();
     if (usersFound.length) {
-      send(res, 500, "Error user found");
+      CommonUtils.send(res, 500, "Error user found");
     } else {
       const hash = await bcrypt.hash(password, COMMON.saltRounds);
       collUsers.insertOne({ username, email, hash });
-      send(res, 200, 'ok');
+      CommonUtils.send(res, 200, 'ok');
     }
   });
 
@@ -78,24 +79,24 @@ function initRoutes(app) {
           .insertOne({ refreshToken });
         res.json({ accessToken, refreshToken });
       } else {
-        send(res, 500, "Password does not match!");
+        CommonUtils.send(res, 500, "Password does not match!");
       }
     } else {
-      send(res, 500, "Error user not found");
+      CommonUtils.send(res, 500, "Error user not found");
     }
   });
 
   app.use("/token", cors(), async (req, res) => {
     const refreshToken = req.body.refreshToken;
     if (!refreshToken) {
-      send(res, 403, "no refresh token sent");
+      CommonUtils.send(res, 403, "no refresh token sent");
       return;
     }
     const itemFound = await DbUtils.getDB()
       .collection("refresh_tokens")
       .findOne({ refreshToken });
     if (!itemFound) {
-      send(res, 403, "error no refresh token found in db");
+      CommonUtils.send(res, 403, "error no refresh token found in db");
       return;
     }
     jwt.verify(
@@ -104,16 +105,16 @@ function initRoutes(app) {
       (err, user) => {
         console.log("err", err, "user", user);
         if (err) {
-          send(res, 403, "error in jwt verify");
+          CommonUtils.send(res, 403, "error in jwt verify");
           return;
         }
         const accessToken = createToken(
           {
-            _id: user.id,
+            _id: user._id,
           },
           process.env.ACCESS_TOKEN_SECRET
         );
-        send(res, 200, { accessToken });
+        CommonUtils.send(res, 200, { accessToken });
       }
     );
   });
@@ -126,15 +127,10 @@ function initRoutes(app) {
 }
 
 function createToken(user, secret, expiresIn = "15s") {
-  return jwt.sign({ id: user._id }, secret, { expiresIn });
+  return jwt.sign({ _id: user._id }, secret, { expiresIn });
 }
 
-function send(res: any, code: number, item?) {
-  res.status(code);
-  if (item) {
-    typeof item === "string" ? res.send(item) : res.json(item);
-  }
-}
+
 
 function handleErrors(app) {
   // catch 404 and forward to error handler
