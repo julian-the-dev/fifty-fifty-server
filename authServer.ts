@@ -57,6 +57,7 @@ function initRoutes(app) {
   });
 
   app.use("/login", cors(), async (req, res) => {
+    console.log('user params', req.body);
     const password = req.body.password;
     const username = req.body.username;
     const collUsers = DbUtils.getDB().collection("users");
@@ -126,7 +127,7 @@ function initRoutes(app) {
   });
 }
 
-function createToken(user, secret, expiresIn = "15s") {
+function createToken(user, secret, expiresIn = "1s") {
   return jwt.sign({ _id: user._id }, secret, { expiresIn });
 }
 
