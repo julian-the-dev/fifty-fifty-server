@@ -127,7 +127,7 @@ function initRoutes(app) {
   });
 }
 
-function createToken(user, secret, expiresIn = "1s") {
+function createToken(user, secret, expiresIn = "5m") {
   return jwt.sign({ _id: user._id }, secret, { expiresIn });
 }
 

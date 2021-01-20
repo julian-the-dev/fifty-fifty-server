@@ -75,4 +75,26 @@ router.use("/fifty-fifty/list", cors(), async function (req, res, next) {
   CommonUtils.send(res, 200, CommonUtils.convertToIdArray(list));
 });
 
+/* GET users listing. */
+router.use(
+  "/user/light",
+  [cors(), authenticateTokenStrict],
+  async function (req: any, res, next) {
+    const _id = req.user._id;
+    const userFound = await DbUtils.getDB()
+      .collection("users")
+      .findOne({ _id: new mongodb.ObjectId(_id) });
+    if (userFound) {
+      const user = {
+        id: userFound._id,
+        username: userFound.username,
+        avatar: userFound.avatar
+      };
+      CommonUtils.send(res, 200, user);
+    } else {
+      CommonUtils.send(res, 500, "No user found");
+    }
+  }
+);
+
 export default router;
